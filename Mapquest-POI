@@ -1,0 +1,119 @@
+import urllib.parse  # formats location details to URL
+import urllib.request  # requests URL from MapQuest & gets response
+import json  # converts response to JSON
+
+
+class MapQuest:
+
+    def __init__(self, API_key):
+        self.API_key = API_key
+        self._BASE_URL = "http://open.mapquestapi.com/directions/v2/route"
+
+    def _make_request(self, query_parameters):
+        """Helper method to handle API requests and error checking."""
+        try:
+            webName = urllib.parse.urlencode(query_parameters, True)
+            requestUrl = self._BASE_URL + "?" + webName
+            opened = urllib.request.urlopen(requestUrl)
+            response = json.load(opened)
+            return response
+        except urllib.error.URLError as e:
+            print(f"Error while making request: {e}")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Error while parsing JSON response: {e}")
+            return None
+
+    def totalDistance(self, locations: list) -> float:
+        """Calculate the total distance for a series of locations."""
+        if len(locations) < 2:
+            print("Insufficient locations for distance calculation.")
+            return 0
+
+        total_distance = 0
+        for num in range(len(locations) - 1):
+            query_parameters = [
+                ('key', self.API_key), 
+                ('from', locations[num]), 
+                ('to', locations[num + 1])
+            ]
+            response = self._make_request(query_parameters)
+            if response:
+                distance = response.get("route", {}).get("distance", 0)
+                total_distance += distance
+        return total_distance
+
+    def totalTime(self, locations: list) -> int:
+        """Calculate the total travel time for a series of locations."""
+        if len(locations) < 2:
+            print("Insufficient locations for time calculation.")
+            return 0
+
+        total_time = 0
+        for num in range(len(locations) - 1):
+            query_parameters = [
+                ('key', self.API_key), 
+                ('from', locations[num]), 
+                ('to', locations[num + 1])
+            ]
+            response = self._make_request(query_parameters)
+            if response:
+                time = response.get("route", {}).get("time", 0)
+                total_time += time
+        return total_time
+
+    def directions(self, locations: list) -> str:
+        """Get step-by-step directions between locations."""
+        if len(locations) < 2:
+            print("Insufficient locations for directions.")
+            return ''
+
+        lst = []
+        for num in range(len(locations) - 1):
+            query_parameters = [
+                ('key', self.API_key), 
+                ('from', locations[num]), 
+                ('to', locations[num + 1])
+            ]
+            response = self._make_request(query_parameters)
+            if response:
+                for dictionary in response["route"]["legs"]:
+                    for direction in dictionary["maneuvers"]:
+                        lst.append(direction["narrative"])
+
+        return '\n'.join(lst)
+
+    def pointOfInterest(self, locations: str, keyword: str, results: int) -> list:
+        """Search for points of interest near a given location."""
+        baseUrl = 'https://www.mapquestapi.com/search/v4/place'
+        resourceURL = 'http://www.mapquestapi.com/geocoding/v1/address'
+        lst = []
+
+        # Geocode the location to get latitude and longitude
+        query_parameters1 = [('key', self.API_key), ('location', locations)]
+        response1 = self._make_request(query_parameters1)
+        if not response1:
+            print("Error geocoding the location.")
+            return []
+
+        latitude = response1["results"][0]["locations"][0]["latLng"]["lat"]
+        longitude = response1["results"][0]["locations"][0]["latLng"]["lng"]
+
+        # Search for points of interest
+        string = f"{longitude},{latitude}"
+        query_parameters2 = [
+            ('location', string),
+            ('sort', 'distance'), 
+            ('key', self.API_key),
+            ('pageSize', results), 
+            ('q', keyword)
+        ]
+        response2 = self._make_request(query_parameters2)
+        if not response2:
+            print("Error retrieving points of interest.")
+            return []
+
+        for result in response2["results"]:
+            lst.append(result["displayString"])
+
+        return lst
